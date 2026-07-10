@@ -3,18 +3,19 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const pic = b.option(bool, "pie", "Produce Position Independent Code");
     const lib = b.addLibrary(.{
         .name = "libjpeg_turbo",
         .linkage = .static,
         .root_module = b.createModule(.{
           .target = target,
           .optimize = optimize,
+          .link_libc = true,
+          .pic = pic,
         })
     });
     
-    lib.linkLibC();
-    
-    lib.addIncludePath(b.path("src"));
+    lib.root_module.addIncludePath(b.path("src"));
     lib.installHeadersDirectory(b.path("src"), "", .{});
     
     const jversion_h = b.addConfigHeader(.{
@@ -28,7 +29,7 @@ pub fn build(b: *std.Build) void {
         .WITH_SIMD = 1,
     });
     
-    lib.addConfigHeader(jversion_h);
+    lib.root_module.addConfigHeader(jversion_h);
     lib.installConfigHeader(jversion_h);
     
     const libjpeg_map = b.addConfigHeader(.{
@@ -42,7 +43,7 @@ pub fn build(b: *std.Build) void {
         .WITH_SIMD = 1,
     });
     
-    lib.addConfigHeader(libjpeg_map);
+    lib.root_module.addConfigHeader(libjpeg_map);
     lib.installConfigHeader(libjpeg_map);
     
     const jconfig_h = b.addConfigHeader(.{
@@ -57,7 +58,7 @@ pub fn build(b: *std.Build) void {
         .WITH_SIMD = 1,
     });
     
-    lib.addConfigHeader(jconfig_h);
+    lib.root_module.addConfigHeader(jconfig_h);
     lib.installConfigHeader(jconfig_h);
     
     const jconfigint = b.addConfigHeader(.{
@@ -88,7 +89,7 @@ pub fn build(b: *std.Build) void {
         },
     });
     
-    lib.addConfigHeader(jconfigint);
+    lib.root_module.addConfigHeader(jconfigint);
     lib.installConfigHeader(jconfigint);
     
     switch (target.result.cpu.arch) {
@@ -111,7 +112,7 @@ pub fn build(b: *std.Build) void {
         else => {},
     }
     
-    lib.addCSourceFiles(.{
+    lib.root_module.addCSourceFiles(.{
         .files = &.{
             "src/jcapimin.c",
             "src/wrapper/jcapistd-8.c",
@@ -249,8 +250,8 @@ fn addArmFiles(b: *std.Build, library: *std.Build.Step.Compile, is64: bool) void
         .include_path = "neon-compat.h"
     }, .{});
 
-    library.addConfigHeader(neon_compat);
-    library.addIncludePath(b.path("simd/arm"));
+    library.root_module.addConfigHeader(neon_compat);
+    library.root_module.addIncludePath(b.path("simd/arm"));
 
     const arch_sources = if (is64) blk: {
         var sources = std.array_list.Managed([]const u8).init(std.heap.page_allocator);
@@ -282,7 +283,7 @@ fn addArmFiles(b: *std.Build, library: *std.Build.Step.Compile, is64: bool) void
         "-mfloat-abi=softfp"
     };
 
-    library.addCSourceFiles(.{
+    library.root_module.addCSourceFiles(.{
         .flags = flags,
         .files = arch_sources,
     });
@@ -411,23 +412,17 @@ fn addX86Files(b: *std.Build, lib: *std.Build.Step.Compile, target: std.Build.Re
         nasm_run.addArgs(dargs.items);
 
         // nasm requires a trailing slash on include directories
-        const root = b.path(".").getPath3(b, &lib.step);
-        nasm_run.addArg(b.fmt("-I{f}/", .{root}));
-        nasm_run.addArg(b.fmt("-I{f}/simd/nasm/", .{root}));
-        nasm_run.addArg(b.fmt("-I{f}/{s}/", .{root, std.fs.path.dirname(input_file).?}));
-
-        // TODO: Zig 0.15:
-        //nasm_run.addDecoratedDirectoryArg("-I", b.path("."), "/");
-        //nasm_run.addDecoratedDirectoryArg("-I", b.path("."), "/nasm/");
-        //nasm_run.addDecoratedDirectoryArg("-I", b.path(std.fs.path.dirname(input_file).?), "/");
+        nasm_run.addDecoratedDirectoryArg("-I", b.path("."), "/");
+        nasm_run.addDecoratedDirectoryArg("-I", b.path("."), "/simd/nasm/");
+        nasm_run.addDecoratedDirectoryArg("-I", b.path(std.fs.path.dirname(input_file).?), "/");
 
         nasm_run.addArgs(&.{"-o"});
-        lib.addObjectFile(nasm_run.addOutputFileArg(output_basename));
+        lib.root_module.addObjectFile(nasm_run.addOutputFileArg(output_basename));
 
         nasm_run.addFileArg(b.path(input_file));
     }
 
-    lib.addCSourceFiles(.{
+    lib.root_module.addCSourceFiles(.{
         .files = &.{"simd/jsimd.c"}
     });
 }
