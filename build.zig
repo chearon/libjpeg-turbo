@@ -3,7 +3,7 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const pic = b.option(bool, "pie", "Produce Position Independent Code");
+    const pic = b.option(bool, "pie", "Produce Position Independent Code") orelse false;
     const lib = b.addLibrary(.{
         .name = "libjpeg_turbo",
         .linkage = .static,
@@ -104,10 +104,10 @@ pub fn build(b: *std.Build) void {
             }
         },
         .x86 => {
-            addX86Files(b, lib, target);
+            addX86Files(b, lib, target, pic);
         },
         .x86_64 => {
-            addX86Files(b, lib, target);
+            addX86Files(b, lib, target, pic);
         },
         else => {},
     }
@@ -366,7 +366,7 @@ const nasm_i386_sources: []const []const u8 = &.{
     "simd/i386/jquanti-avx2.asm",
 };
 
-fn addX86Files(b: *std.Build, lib: *std.Build.Step.Compile, target: std.Build.ResolvedTarget) void {
+fn addX86Files(b: *std.Build, lib: *std.Build.Step.Compile, target: std.Build.ResolvedTarget, pic: bool) void {
     const is64 = target.result.cpu.arch == .x86_64;
     const sources = if (is64) nasm_x86_64_sources else nasm_i386_sources;
     const nasm_dep = b.dependency("nasm", .{.optimize = .ReleaseFast});
@@ -403,6 +403,10 @@ fn addX86Files(b: *std.Build, lib: *std.Build.Step.Compile, target: std.Build.Re
         if (target.result.os.tag == .windows) {
             dargs.append("-DWIN32") catch unreachable;
         }
+    }
+
+    if (pic and target.result.os.tag != .windows) {
+        dargs.append("-DPIC") catch unreachable;
     }
     
     for (sources) |input_file| {
