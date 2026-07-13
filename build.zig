@@ -383,7 +383,7 @@ fn addX86Files(b: *std.Build, lib: *std.Build.Step.Compile, target: std.Build.Re
         },
         .elf => {
             dargs.append("-f") catch unreachable;
-            dargs.append(if (is64) "elf64" else "elfx32") catch unreachable;
+            dargs.append(if (is64) "elf64" else "elf32") catch unreachable;
             dargs.append("-DELF") catch unreachable;
         },
         .coff => {
